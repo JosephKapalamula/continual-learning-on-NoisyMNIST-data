@@ -1,0 +1,14 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# Runtime used by the executed research artifacts
+numpy==2.5.2
+pandas==3.0.5
+matplotlib>=3.10,<4
+torch==2.13.0+cpu
+torchvision==0.28.0+cpu
+
+# Notebook environment and reproducible execution
+jupyterlab>=4.4,<5
+ipykernel>=6.30,<7
+nbconvert>=7.16,<8
+nbclient>=0.10,<1
