@@ -68,7 +68,7 @@ class ForwardPass:
 
 
 class NoisyMNISTMLP(nn.Module):
-    """4,096 → 10,000 ReLU → 1 network with auditable initialization."""
+    """Readable 4,096 -> 10,000 ReLU -> 1 network."""
 
     def __init__(self, config: ModelConfig) -> None:
         super().__init__()
@@ -85,26 +85,58 @@ class NoisyMNISTMLP(nn.Module):
                 else torch.cuda.current_device()
             ]
 
-        # nn.Linear performs a default random reset in its constructor. fork_rng
-        # prevents that temporary initialization from advancing global RNG state;
-        # the tensors are immediately overwritten by the source-defined reset.
+        # Keep constructor-time randomness isolated because the layers are
+        # immediately overwritten by the source-defined initialization below.
         with torch.random.fork_rng(devices=cuda_devices, enabled=True):
-            self.input_to_hidden = nn.Linear(
-                config.input_size,
-                config.hidden_size,
-                bias=config.use_bias,
-                device=target_device,
-                dtype=config.dtype,
-            )
-            self.hidden_to_output = nn.Linear(
-                config.hidden_size,
-                config.output_size,
-                bias=config.use_bias,
-                device=target_device,
-                dtype=config.dtype,
+            self.network = nn.Sequential(
+                nn.Linear(
+                    config.input_size,
+                    config.hidden_size,
+                    bias=config.use_bias,
+                    device=target_device,
+                    dtype=config.dtype,
+                ),
+                nn.ReLU(),
+                nn.Linear(
+                    config.hidden_size,
+                    config.output_size,
+                    bias=config.use_bias,
+                    device=target_device,
+                    dtype=config.dtype,
+                ),
             )
 
+        self._last_hidden_activations: Optional[Tensor] = None
+        self.network[1].register_forward_hook(self._capture_hidden_activations)
         self.reset_parameters_from_config(config.initialization_seed)
+
+    def _capture_hidden_activations(
+        self,
+        _module: nn.Module,
+        _inputs: tuple[Tensor, ...],
+        output: Tensor,
+    ) -> None:
+        """Capture ReLU output for diagnostics during the current forward pass."""
+
+        self._last_hidden_activations = output
+
+    @property
+    def input_to_hidden(self) -> nn.Linear:
+        """Return the input-to-hidden layer from the sequential network."""
+
+        return self.network[0]
+
+    @property
+    def activation(self) -> nn.ReLU:
+        """Return the hidden activation layer from the sequential network."""
+
+        return self.network[1]
+
+    @property
+    def hidden_to_output(self) -> nn.Linear:
+        """Return the hidden-to-output layer from the sequential network."""
+
+        return self.network[2]
 
     @property
     def first_layer_weights(self) -> nn.Parameter:
@@ -158,7 +190,7 @@ class NoisyMNISTMLP(nn.Module):
                 self.second_layer_bias.fill_(self.config.bias_initial_value)
 
     def forward_with_activations(self, x: Tensor) -> ForwardPass:
-        """Return the scalar/vector prediction together with hidden activations."""
+        """Return predictions and the hidden activations captured by the hook."""
 
         if x.ndim not in (1, 2):
             raise ValueError("Expected input shape [4096] or [batch, 4096].")
@@ -174,8 +206,11 @@ class NoisyMNISTMLP(nn.Module):
                 f"Input is on {x.device}; model is on {self.first_layer_weights.device}."
             )
 
-        hidden_activations = torch.relu(self.input_to_hidden(x))
-        prediction = self.hidden_to_output(hidden_activations).squeeze(-1)
+        self._last_hidden_activations = None
+        prediction = self.network(x).squeeze(-1)
+        hidden_activations = self._last_hidden_activations
+        if hidden_activations is None:
+            raise RuntimeError("The hidden-activation hook did not run.")
         return ForwardPass(
             prediction=prediction,
             hidden_activations=hidden_activations,
