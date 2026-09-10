@@ -58,5 +58,6 @@
 ### 2026-09-10 — Session 6 (IDBD diagnosis)
 - IDBD 10k seed 11 flat: digit_mse 1.0000 every checkpoint, mean_pred exactly 0.0000, clean exactly 0.1000 → zero movement (alphas never grew). Mechanism: alpha0=1e-6 × tiny phi (~3e-4) → updates ~1e-10; per-step delta sign noise-dominated so meta random-walks while decay drags betas to floor.
 - Pushed IDBD script v2: logs mean_alpha_w1/w2 each eval + saves optimizer_state in checkpoints + --alpha0/--meta_lr ablation flags (separate outdir). Next: credit check on old checkpoints, then alpha0=1e-4 ablation 10k seed 11.
+- CREDIT RESULT (Figure 2 reproduced): SGD seed11 → 3312/3312 noise pixels above 0.0002, center 597, max|w|=0.078 (credit everywhere). IDBD seed11 → 0/3312 noise, 0 center, max|w|=1e-4 (asleep, clean). Ablation alpha0=1e-4 running: a1/a2 sinking (9.98e-5→9.93e-5), decay winning so far, digit_mse 1.0 @2500. Await 10k.
 
 <!-- Append new sessions below as ### YYYY-MM-DD — Session N -->
