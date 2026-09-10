@@ -51,6 +51,24 @@ class NetworkIDBDTrialConfig:
     tau: float = 1e4
 
 
+def _diverged_row(trial_config, reason: str) -> dict[str, float | int | bool]:
+    """Return a ranked-last row for diverged trials instead of crashing the sweep."""
+    base = asdict(trial_config)
+    base.update(
+        {
+            "noisy_target_mse": float("inf"),
+            "clean_target_mse": float("inf"),
+            "digit_present_count": 0,
+            "digit_present_clean_target_mse": float("inf"),
+            "digit_absent_clean_target_mse": float("inf"),
+            "mean_prediction": float("nan"),
+            "finite": False,
+            "diverge_reason": str(reason),
+        }
+    )
+    return base
+
+
 def run_sgd_trial(
     model_config: ModelConfig,
     training_experiences: Sequence[Experience],
@@ -68,15 +86,20 @@ def run_sgd_trial(
     model = NoisyMNISTMLP(model_config)
     optimizer = make_vanilla_sgd(model, trial_config.learning_rate)
 
-    for experience in training_experiences:
-        online_sgd_update(
-            model,
-            optimizer,
-            experience,
-            LossConvention.MEAN_SQUARED_ERROR,
-            compute_gradient_norm=False,
-            check_parameter_finiteness=True,
-        )
+    try:
+        for experience in training_experiences:
+            online_sgd_update(
+                model,
+                optimizer,
+                experience,
+                LossConvention.MEAN_SQUARED_ERROR,
+                compute_gradient_norm=False,
+                check_parameter_finiteness=True,
+            )
+    except FloatingPointError as exc:
+        # lr too large (e.g. 0.1 on 41M-param MLP) -> record as diverged,
+        # rank last via finite=False + inf MSE, keep sweeping other lrs.
+        return _diverged_row(trial_config, f"sgd_diverged: {exc}")
 
     metrics = evaluate_model(
         model,
@@ -159,14 +182,17 @@ def run_network_idbd_trial(
         tau=trial_config.tau,
     )
 
-    for experience in training_experiences:
-        online_network_idbd_update(
-            model,
-            optimizer,
-            experience,
-            LossConvention.MEAN_SQUARED_ERROR,
-            check_parameter_finiteness=True,
-        )
+    try:
+        for experience in training_experiences:
+            online_network_idbd_update(
+                model,
+                optimizer,
+                experience,
+                LossConvention.MEAN_SQUARED_ERROR,
+                check_parameter_finiteness=True,
+            )
+    except FloatingPointError as exc:
+        return _diverged_row(trial_config, f"idbd_diverged: {exc}")
 
     metrics = evaluate_model(
         model,

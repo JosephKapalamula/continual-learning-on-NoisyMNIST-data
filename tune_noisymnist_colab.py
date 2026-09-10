@@ -89,9 +89,18 @@ def tune_sgd(mconfig: ModelConfig, train_exps, valid_exps, init_seed: int,
     for lr in coarse:
         cfg_t = SGDTrialConfig(lr, init_seed, 314159, 271828, len(train_exps), len(valid_exps))
         t0 = time.time()
-        r = run_sgd_trial(mconfig, train_exps, valid_exps, cfg_t)
-        print(f"  lr={lr:<8} digit_mse={r['digit_present_clean_target_mse']:.4f} "
-              f"clean={r['clean_target_mse']:.4f} finite={r['finite']} ({time.time()-t0:.1f}s)")
+        try:
+            r = run_sgd_trial(mconfig, train_exps, valid_exps, cfg_t)
+        except FloatingPointError as e:
+            # Belt-and-suspenders: run_sgd_trial already returns a diverged row,
+            # but never let one lr kill the whole sweep.
+            r = {"learning_rate": lr, "digit_present_clean_target_mse": float("inf"),
+                 "clean_target_mse": float("inf"), "finite": False, "diverge_reason": str(e)}
+            print(f"  lr={lr:<8} DIVERGED: {e}")
+        else:
+            status = "DIVERGED" if not r["finite"] else f"digit_mse={r['digit_present_clean_target_mse']:.4f}"
+            print(f"  lr={lr:<8} {status} "
+                  f"clean={r['clean_target_mse']:.4f} finite={r['finite']} ({time.time()-t0:.1f}s)")
         rows.append(r)
     coarse_df = rank_trials(pd.DataFrame(rows))
     best = float(coarse_df.iloc[0]["learning_rate"])
@@ -102,8 +111,15 @@ def tune_sgd(mconfig: ModelConfig, train_exps, valid_exps, init_seed: int,
     fine_rows = []
     for lr in fine_grid:
         cfg_t = SGDTrialConfig(float(lr), init_seed, 314159, 271828, len(train_exps), len(valid_exps))
-        r = run_sgd_trial(mconfig, train_exps, valid_exps, cfg_t)
-        print(f"  lr={lr:<8.5f} digit_mse={r['digit_present_clean_target_mse']:.4f}")
+        try:
+            r = run_sgd_trial(mconfig, train_exps, valid_exps, cfg_t)
+        except FloatingPointError as e:
+            r = {"learning_rate": float(lr), "digit_present_clean_target_mse": float("inf"),
+                 "clean_target_mse": float("inf"), "finite": False, "diverge_reason": str(e)}
+            print(f"  lr={lr:<8.5f} DIVERGED: {e}")
+        else:
+            status = "DIVERGED" if not r["finite"] else f"digit_mse={r['digit_present_clean_target_mse']:.4f}"
+            print(f"  lr={lr:<8.5f} {status}")
         fine_rows.append(r)
     fine_df = rank_trials(pd.DataFrame(fine_rows))
     print(f"fine winner: lr={float(fine_df.iloc[0]['learning_rate'])}")
@@ -117,8 +133,14 @@ def tune_sgd_halving(mconfig: ModelConfig, full_train, valid_exps, candidates, i
     per_rung, cands = {}, [float(v) for v in candidates]
     for rung in rungs:
         prefix = full_train[:rung]
-        rows = [run_sgd_trial(mconfig, prefix, valid_exps,
-                SGDTrialConfig(lr, init_seed, 314159, 271828, rung, len(valid_exps))) for lr in cands]
+        rows = []
+        for lr in cands:
+            try:
+                rows.append(run_sgd_trial(mconfig, prefix, valid_exps,
+                    SGDTrialConfig(lr, init_seed, 314159, 271828, rung, len(valid_exps))))
+            except FloatingPointError as e:
+                rows.append({"learning_rate": lr, "digit_present_clean_target_mse": float("inf"),
+                             "clean_target_mse": float("inf"), "finite": False, "diverge_reason": str(e)})
         df = rank_trials(pd.DataFrame(rows))
         per_rung[rung] = df
         print(f"  rung {rung}: best lr={float(df.iloc[0]['learning_rate'])} "

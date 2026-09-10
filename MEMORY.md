@@ -33,4 +33,9 @@
 - User on hyperparameter tuning stage, wants Colab GPU code (PyTorch) + CEO presentation.
 - Auto-update policy: keep serving history without waiting.
 
+### 2026-09-10 — Session 3 (Colab GPU run)
+- User cloned repo (origin: continual-learning-on-NoisyMNIST-data.git), ready for GPU tuning.
+- Gave Colab T4 steps: Runtime->GPU, pip install pandas matplotlib, --quick then full 1000/1000.
+- Pending: get --quick output, then full run, freeze best, multi-seed confirm, CEO plots.
+
 <!-- Append new sessions below as ### YYYY-MM-DD — Session N -->
