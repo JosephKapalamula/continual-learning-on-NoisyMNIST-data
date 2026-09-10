@@ -49,5 +49,7 @@
 - Full 1000/1000 DONE on T4 in 15.3min: coarse winner lr=0.01 (0.9995 vs 1.0), fine winner lr=0.01 (0.9995 vs 0.9999/1.0019/DIVERGED), freeze confirm 0.9962±0.0043 (seeds 11/22/33). IDBD 8cfgs all 1.0 (~105s/1000 GPU vs 5.8s SGD). Halving showed low-fidelity trap (0.1 best at 100 then inf) → fixed to best-finite + keep>=2.
 
 ### 2026-09-10 — Session 5 (full results + CEO next)
+- Frozen SGD lr=0.01. Created train_final_noisymnist_colab.py: train on training pool only, fixed-validation curves every eval_every, embargoed test touched ONCE via dedicated evaluator (src evaluate_model forbids test by design), multi-seed mean±std, CEO plots + checkpoints in final_results/. Default 10k train / 1k valid / 2k test, eval_every 500.
+- Validated --quick --skip_test on CPU EXIT 0 (200 steps, 42s). Next: Colab T4 --quick then full 10k x3 seeds.
 
 <!-- Append new sessions below as ### YYYY-MM-DD — Session N -->
