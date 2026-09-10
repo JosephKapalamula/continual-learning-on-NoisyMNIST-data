@@ -39,5 +39,11 @@
 - Gave Colab T4 steps: Runtime->GPU, pip install pandas matplotlib, --quick then full 1000/1000.
 - Pending: get --quick output, then full run, freeze best, multi-seed confirm, CEO plots.
 - Colab T4 --quick crashed at lr=0.1 FloatingPointError + digit_mse=1.0 for small lrs (expected: zero-init, short horizon). Fixed + pushed 5b5d5e1. Next: re-clone in Colab, rerun --quick.
+- --quick rerun OK on T4: 1e-5..0.01 all digit_mse=1.0 clean=0.1211, 0.1 DIVERGED handled. No discrimination at 200 steps (ties). Explained: digit MSE != accuracy, 1.0 = predict-zero baseline (odd=1, even=-1).
+
+### 2026-09-10 — Session 4 (digit-MSE meaning)
+- Q: what is digit MSE, is it accuracy, why always 1?
+- A: digit_present_clean_mse = mean (pred-clean)^2 on digit-present subset only, clean=±1. Pred-0 baseline = 1.0 exactly. Notebook QUICK also 1.0. Overall clean ~0.1 baseline (P=0.10). Need 1000-step full run for signal; 200-step ties expected.
+- Next: full 1000/1000 run on T4, check mean_prediction moves off 0, digit MSE <1.0 discriminates.
 
 <!-- Append new sessions below as ### YYYY-MM-DD — Session N -->
