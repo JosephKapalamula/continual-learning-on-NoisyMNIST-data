@@ -19,8 +19,8 @@
 - 2026-09-10 — Halving policy: report/promote best-FINITE only, keep >=2 cands until final rung. Fixes lock-in where lr=0.1 lucky at 100 steps (0.9951) then inf at 300+ stayed champion.
 
 ## 3. Current Status / Next Steps
-- Benchmarked here (CPU, 41M params): SGD 0.154s/step (~2.6 min/1000), IDBD 8.378s/step (~140 min/1000), eval 0.0156s/step. Notebook comparison-cell = ~4.3h CPU (eval 1000 after every update) — must avoid.
-- Next: run tune_noisymnist_colab.py --quick on Colab T4 GPU, then full --train_steps 1000 --valid_steps 1000 --idbd_configs 8. Freeze best, multi-seed confirm, CEO plots in tuning_results/.
+- RESET 2026-09-10 (Session 7): experiment scripts removed (tune_*, train_final_*), results/checkpoints dropped. Bench kept: src/, notebook, data/MNIST, PDF, requirements. Existing src/optim IDBD code stays as REFERENCE only — not trusted, to be verified against our derivation.
+- Program: design NetworkIDBD from first principles. Step 1 linear IDBD (Sutton 1992): derive meta-gradient, implement minimal, prove on 2-feature Bernoulli task (src/data/linear_streams.py, notebook cell 22). Step 2: lift to network via phi=dŷ/dw + additions (scale-free meta, small alpha0, decay, overshoot bound), each justified, each ablated.
 
 ## 4. Chat Log
 ### 2026-09-10 — Session 1
@@ -60,5 +60,11 @@
 - Pushed IDBD script v2: logs mean_alpha_w1/w2 each eval + saves optimizer_state in checkpoints + --alpha0/--meta_lr ablation flags (separate outdir). Next: credit check on old checkpoints, then alpha0=1e-4 ablation 10k seed 11.
 - CREDIT RESULT (Figure 2 reproduced): SGD seed11 → 3312/3312 noise pixels above 0.0002, center 597, max|w|=0.078 (credit everywhere). IDBD seed11 → 0/3312 noise, 0 center, max|w|=1e-4 (asleep, clean). Ablation alpha0=1e-4 running: a1/a2 sinking (9.98e-5→9.93e-5), decay winning so far, digit_mse 1.0 @2500. Await 10k.
 - Ablation 10k verdict: digit_mse 1.0000 all checkpoints; a1 9.98e-5→~9.8e-5 (layer1 frozen, phi×W2=0 by design), a2 8.84e-5→~3e-5 (3x shrink; pure decay would be ~30x, so meta pushes up but loses). Decay-dominated regime. Offered A (no-decay ablation via new --decay flag), B (50k overnight), C (declare CEO result: SGD fast+noisy credit vs IDBD clean credit, article-faithful). Awaiting user pick.
+- User picked RESET: remove experiment scripts + results, train IDBD-only, design optimizer from first principles. Chose scope scripts+results only + start linear-first.
+
+### 2026-09-10 — Session 7 (reset + first-principles program)
+- Removed (git rm): tune_noisymnist_colab.py, train_final_noisymnist_colab.py, train_final_idbd_noisymnist_colab.py. No local result dirs remained. Kept: src/, continual_learning_complete.ipynb, data/MNIST, PDF, requirements.txt, README, MEMORY.md.
+- Key prior findings preserved: SGD lr=0.01 winner (10k: 0.9008±0.0624, test 0.8967); Figure 2 credit reproduced (SGD 3312/3312 noise, IDBD 0/3312); IDBD prediction-flat = decay-dominated timescale problem, not code crash (implementation verified faithful vs Janiak note; v-floor 1e-8 vs 1e-30 kept for float32).
+- Program: (1) derive linear IDBD from first principles → minimal implementation → prove on Bernoulli 2-feature task; (2) lift to network via phi + justified additions; (3) ablating each addition; (4) NoisyMNIST comparison vs frozen SGD lr=0.01 baseline.
 
 <!-- Append new sessions below as ### YYYY-MM-DD — Session N -->
