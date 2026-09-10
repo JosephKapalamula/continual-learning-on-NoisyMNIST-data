@@ -56,5 +56,7 @@
 - IDBD 10k seed 11 on T4: digit_mse stuck 1.0000 at every 500-step checkpoint (vs SGD 0.8898 same seed). Diagnosed vs Janiak/Precursor reverse-engineering note: implementation faithful (phi/meta/E/s/h all match; one noted deviation: v-floor 1e-8 vs article 1e-30, kept for float32 stability). Cause = timescale: alpha0=1e-6 needs ~18 nats growth to reach layer2 ~100, capped ≤0.1/step, digits only 10% → 10k steps insufficient. Article admits unknown Oak step count + only 1k-hidden test. Figure 2 caption: similar MSE, IDBD wins on CREDIT (0/3312 noise pixels), not MSE. Next: checkpoint credit diagnostics, then long IDBD (50k+) and/or alpha0 ablation.
 
 ### 2026-09-10 — Session 6 (IDBD diagnosis)
+- IDBD 10k seed 11 flat: digit_mse 1.0000 every checkpoint, mean_pred exactly 0.0000, clean exactly 0.1000 → zero movement (alphas never grew). Mechanism: alpha0=1e-6 × tiny phi (~3e-4) → updates ~1e-10; per-step delta sign noise-dominated so meta random-walks while decay drags betas to floor.
+- Pushed IDBD script v2: logs mean_alpha_w1/w2 each eval + saves optimizer_state in checkpoints + --alpha0/--meta_lr ablation flags (separate outdir). Next: credit check on old checkpoints, then alpha0=1e-4 ablation 10k seed 11.
 
 <!-- Append new sessions below as ### YYYY-MM-DD — Session N -->

@@ -136,14 +136,26 @@ def train_one_seed(seed, data_root, device, train_steps, valid_steps, eval_every
         )
         if step % eval_every == 0 or step == train_steps:
             m = evaluate_model(model, iter(valid_exps), valid_steps, "validation")
+            # Diagnose meta dynamics: mean step size per layer. If these sit at
+            # alpha0 (or sink to beta_min floor), the meta-signal is drowning in
+            # target noise and weights cannot move — the "asleep" signature.
+            with torch.no_grad():
+                alpha_means = []
+                for p in model.parameters():
+                    b = opt.state[p].get("beta", None)
+                    if b is not None:
+                        alpha_means.append(float(torch.exp(b).mean().cpu()))
             curve.append({
                 "seed": seed, "step": step,
                 "digit_present_clean_target_mse": m.digit_present_clean_target_mse,
                 "clean_target_mse": m.clean_target_mse,
                 "mean_prediction": m.mean_prediction,
                 "finite": m.finite,
+                "mean_alpha_w1": alpha_means[0] if len(alpha_means) > 0 else float("nan"),
+                "mean_alpha_w2": alpha_means[1] if len(alpha_means) > 1 else float("nan"),
             })
-            print(f"    seed {seed} step {step}: digit_mse={curve[-1]['digit_present_clean_target_mse']:.4f}",
+            print(f"    seed {seed} step {step}: digit_mse={curve[-1]['digit_present_clean_target_mse']:.4f} "
+                  f"a1={curve[-1]['mean_alpha_w1']:.2e} a2={curve[-1]['mean_alpha_w2']:.2e}",
                   flush=True)
     dt = time.time() - t0
     final = curve[-1]
@@ -152,7 +164,8 @@ def train_one_seed(seed, data_root, device, train_steps, valid_steps, eval_every
 
     (outdir / "checkpoints").mkdir(parents=True, exist_ok=True)
     torch.save({"seed": seed, "frozen": FROZEN, "train_steps": train_steps,
-                "state_dict": model.state_dict()},
+                "state_dict": model.state_dict(),
+                "optimizer_state": opt.state_dict()},
                outdir / "checkpoints" / f"seed_{seed}.pt")
     return {"curve": curve, "model": model, "config": cfg}
 
@@ -168,7 +181,18 @@ def main():
     ap.add_argument("--data_root", type=str, default="data/MNIST")
     ap.add_argument("--outdir", type=str, default="final_idbd_results")
     ap.add_argument("--skip_test", action="store_true")
+    ap.add_argument("--alpha0", type=float, default=1e-6,
+                    help="Override frozen initial step size (ablation only).")
+    ap.add_argument("--meta_lr", type=float, default=0.1,
+                    help="Override frozen meta step size theta (ablation only).")
     args = ap.parse_args()
+
+    if args.alpha0 != 1e-6 or args.meta_lr != 0.1:
+        import math as _math
+        FROZEN["initial_beta"] = _math.log(args.alpha0)
+        FROZEN["meta_lr"] = args.meta_lr
+        args.outdir = args.outdir.rstrip("/") + f"_a0{args.alpha0}_th{args.meta_lr}"
+        print(f"ABLATION (not frozen): alpha0={args.alpha0} meta_lr={args.meta_lr} -> {args.outdir}")
 
     if args.quick:
         args.train_steps, args.valid_steps, args.test_steps = 100, 128, 128
