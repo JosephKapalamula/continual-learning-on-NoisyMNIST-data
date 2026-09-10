@@ -136,7 +136,7 @@ def tune_sgd_successive_halving(
     rungs = successive_halving_schedule(r_min, r_max, eta)
     candidates = [float(v) for v in learning_rates]
     per_rung: dict[int, pd.DataFrame] = {}
-    for rung in rungs:
+    for ri, rung in enumerate(rungs):
         prefix = full_training[:rung]
         rows = []
         for lr in candidates:
@@ -151,11 +151,12 @@ def tune_sgd_successive_halving(
             rows.append(run_sgd_trial(model_config, prefix, validation_experiences, cfg))
         df = rank_trials(pd.DataFrame(rows))
         per_rung[rung] = df
-        keep = max(1, len(candidates) // eta)
-        candidates = [float(v) for v in df.iloc[:keep]["learning_rate"].tolist()]
-        if len(candidates) == 1 and rung != rungs[-1]:
-            # champion gets remaining rungs alone; still record them
-            pass
+        # Prefer finite configs for promotion; never lock onto a diverged
+        # low-fidelity lucky winner (e.g. lr=0.1 good at 100 steps, inf at 300+).
+        pool = df[df["finite"].astype(bool)] if df["finite"].astype(bool).any() else df
+        last = (ri == len(rungs) - 1)
+        keep = max(1 if last else min(2, len(pool)), len(candidates) // eta)
+        candidates = [float(v) for v in pool.iloc[:keep]["learning_rate"].tolist()]
     return per_rung[rungs[-1]], per_rung
 
 

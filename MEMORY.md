@@ -16,6 +16,7 @@
 - 2026-09-10 — Device policy: auto cuda/cpu, same device for ExperimentConfig + ModelConfig. CPU=SGD full, IDBD skipped unless --force_idbd or GPU. IDBD ~54x slower on CPU.
 - 2026-09-10 — Created tune_noisymnist_colab.py (Colab GPU + local). Validated tiny run 20/32 steps EXIT 0.
 - 2026-09-10 — Divergence policy: FloatingPointError never kills sweep. run_sgd/idbd_trial returns inf-MSE finite=False diverged row, ranked last. Fixes lr=0.1 crash on T4 (commit 5b5d5e1).
+- 2026-09-10 — Halving policy: report/promote best-FINITE only, keep >=2 cands until final rung. Fixes lock-in where lr=0.1 lucky at 100 steps (0.9951) then inf at 300+ stayed champion.
 
 ## 3. Current Status / Next Steps
 - Benchmarked here (CPU, 41M params): SGD 0.154s/step (~2.6 min/1000), IDBD 8.378s/step (~140 min/1000), eval 0.0156s/step. Notebook comparison-cell = ~4.3h CPU (eval 1000 after every update) — must avoid.
@@ -45,5 +46,8 @@
 - Q: what is digit MSE, is it accuracy, why always 1?
 - A: digit_present_clean_mse = mean (pred-clean)^2 on digit-present subset only, clean=±1. Pred-0 baseline = 1.0 exactly. Notebook QUICK also 1.0. Overall clean ~0.1 baseline (P=0.10). Need 1000-step full run for signal; 200-step ties expected.
 - Next: full 1000/1000 run on T4, check mean_prediction moves off 0, digit MSE <1.0 discriminates.
+- Full 1000/1000 DONE on T4 in 15.3min: coarse winner lr=0.01 (0.9995 vs 1.0), fine winner lr=0.01 (0.9995 vs 0.9999/1.0019/DIVERGED), freeze confirm 0.9962±0.0043 (seeds 11/22/33). IDBD 8cfgs all 1.0 (~105s/1000 GPU vs 5.8s SGD). Halving showed low-fidelity trap (0.1 best at 100 then inf) → fixed to best-finite + keep>=2.
+
+### 2026-09-10 — Session 5 (full results + CEO next)
 
 <!-- Append new sessions below as ### YYYY-MM-DD — Session N -->

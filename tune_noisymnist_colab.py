@@ -131,7 +131,7 @@ def tune_sgd_halving(mconfig: ModelConfig, full_train, valid_exps, candidates, i
                                         len(full_train), eta=3)
     print(f"\n=== SUCCESSIVE HALVING rungs={rungs} ===")
     per_rung, cands = {}, [float(v) for v in candidates]
-    for rung in rungs:
+    for ri, rung in enumerate(rungs):
         prefix = full_train[:rung]
         rows = []
         for lr in cands:
@@ -143,10 +143,18 @@ def tune_sgd_halving(mconfig: ModelConfig, full_train, valid_exps, candidates, i
                              "clean_target_mse": float("inf"), "finite": False, "diverge_reason": str(e)})
         df = rank_trials(pd.DataFrame(rows))
         per_rung[rung] = df
-        print(f"  rung {rung}: best lr={float(df.iloc[0]['learning_rate'])} "
-              f"digit_mse={float(df.iloc[0]['digit_present_clean_target_mse']):.4f} "
-              f"(tested {len(cands)})")
-        cands = [float(v) for v in df.iloc[:max(1, len(cands)//3)]["learning_rate"].tolist()]
+        finite_df = df[df["finite"].astype(bool)]
+        # Report best-finite (a diverged low-fidelity lucky winner must not mask the signal).
+        rep = finite_df.iloc[0] if len(finite_df) else df.iloc[0]
+        print(f"  rung {rung}: best lr={float(rep['learning_rate'])} "
+              f"digit_mse={float(rep['digit_present_clean_target_mse']):.4f} "
+              f"finite={bool(rep['finite'])} (tested {len(cands)})")
+        # Keep top 1/3 of FINITE configs when any exist; keep >=2 until final rung
+        # so one lucky low-fidelity rung cannot lock in a later-diverging lr (e.g. 0.1).
+        pool = finite_df if len(finite_df) else df
+        last = (ri == len(rungs) - 1)
+        keep = max(1 if last else min(2, len(pool)), len(cands) // 3)
+        cands = [float(v) for v in pool.iloc[:keep]["learning_rate"].tolist()]
     return per_rung
 
 
