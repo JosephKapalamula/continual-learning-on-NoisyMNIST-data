@@ -53,5 +53,8 @@
 - Validated --quick --skip_test on CPU EXIT 0 (200 steps, 42s). Next: Colab T4 --quick then full 10k x3 seeds.
 - SGD FINAL DONE on T4 (10k, 69s/seed): seed11 0.8898 / test 0.8967, seed22 0.9821, seed33 0.8304 → validation 0.9008±0.0624. Real learning vs 1.0 baseline, high seed variance (only ~1000 digit hits).
 - Created train_final_idbd_noisymnist_colab.py (frozen engineered IDBD meta=0.1 alpha0=1e-6 eta=0.1 tau=1e4, paired seeds/streams with SGD). 10-step CPU smoke PASS. --quick=100 steps (~100s T4). Next: IDBD 10k seed 11 (~17min) then compare.
+- IDBD 10k seed 11 on T4: digit_mse stuck 1.0000 at every 500-step checkpoint (vs SGD 0.8898 same seed). Diagnosed vs Janiak/Precursor reverse-engineering note: implementation faithful (phi/meta/E/s/h all match; one noted deviation: v-floor 1e-8 vs article 1e-30, kept for float32 stability). Cause = timescale: alpha0=1e-6 needs ~18 nats growth to reach layer2 ~100, capped ≤0.1/step, digits only 10% → 10k steps insufficient. Article admits unknown Oak step count + only 1k-hidden test. Figure 2 caption: similar MSE, IDBD wins on CREDIT (0/3312 noise pixels), not MSE. Next: checkpoint credit diagnostics, then long IDBD (50k+) and/or alpha0 ablation.
+
+### 2026-09-10 — Session 6 (IDBD diagnosis)
 
 <!-- Append new sessions below as ### YYYY-MM-DD — Session N -->
