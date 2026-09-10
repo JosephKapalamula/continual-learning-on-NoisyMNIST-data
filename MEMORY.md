@@ -15,6 +15,7 @@
 - 2026-09-10 — Tuning strategy: Karpathy coarse-to-fine + successive halving (eta=3) + log-uniform random for IDBD. Fixed streams for all trials.
 - 2026-09-10 — Device policy: auto cuda/cpu, same device for ExperimentConfig + ModelConfig. CPU=SGD full, IDBD skipped unless --force_idbd or GPU. IDBD ~54x slower on CPU.
 - 2026-09-10 — Created tune_noisymnist_colab.py (Colab GPU + local). Validated tiny run 20/32 steps EXIT 0.
+- 2026-09-10 — Divergence policy: FloatingPointError never kills sweep. run_sgd/idbd_trial returns inf-MSE finite=False diverged row, ranked last. Fixes lr=0.1 crash on T4 (commit 5b5d5e1).
 
 ## 3. Current Status / Next Steps
 - Benchmarked here (CPU, 41M params): SGD 0.154s/step (~2.6 min/1000), IDBD 8.378s/step (~140 min/1000), eval 0.0156s/step. Notebook comparison-cell = ~4.3h CPU (eval 1000 after every update) — must avoid.
@@ -37,5 +38,6 @@
 - User cloned repo (origin: continual-learning-on-NoisyMNIST-data.git), ready for GPU tuning.
 - Gave Colab T4 steps: Runtime->GPU, pip install pandas matplotlib, --quick then full 1000/1000.
 - Pending: get --quick output, then full run, freeze best, multi-seed confirm, CEO plots.
+- Colab T4 --quick crashed at lr=0.1 FloatingPointError + digit_mse=1.0 for small lrs (expected: zero-init, short horizon). Fixed + pushed 5b5d5e1. Next: re-clone in Colab, rerun --quick.
 
 <!-- Append new sessions below as ### YYYY-MM-DD — Session N -->
