@@ -13,6 +13,7 @@ from torch import Tensor, nn
 
 from src.data import Experience
 from src.models import NoisyMNISTMLP
+from src.optim import NetworkIDBD
 
 
 class LossConvention(str, Enum):
@@ -47,8 +48,11 @@ class EvaluationMetrics:
     """Mean metrics from a fixed finite stream without parameter updates."""
 
     num_steps: int
+    digit_present_count: int
     noisy_target_mse: float
     clean_target_mse: float
+    digit_present_clean_target_mse: float
+    digit_absent_clean_target_mse: float
     mean_prediction: float
     finite: bool
 
@@ -165,6 +169,79 @@ def online_sgd_update(
     )
 
 
+def online_network_idbd_update(
+    model: NoisyMNISTMLP,
+    optimizer: NetworkIDBD,
+    experience: Experience,
+    loss_convention: LossConvention,
+    check_parameter_finiteness: bool = False,
+) -> OnlineStepMetrics:
+    """Consume one experience with the experimental neural-IDBD candidate."""
+
+    x_flat = experience["x_flat"]
+    noisy_target = experience["noisy_target"]
+    clean_target = experience["clean_target"]
+    if x_flat.shape != (model.config.input_size,):
+        raise ValueError("Expected one flattened NoisyMNIST experience.")
+    if experience["source_partition"] != "official_train":
+        raise ValueError("Online development updates must not consume official test data.")
+    if experience["pool_name"] != "training":
+        raise ValueError("Weight updates must consume the isolated training pool only.")
+
+    parameters = tuple(model.parameters())
+    optimizer.zero_grad(set_to_none=True)
+    forward_result = model.forward_with_activations(x_flat)
+    prediction = forward_result.prediction
+    loss = prediction_loss(prediction, noisy_target, loss_convention)
+    if not torch.isfinite(loss):
+        raise FloatingPointError("Non-finite loss before NetworkIDBD update.")
+
+    phi_values = torch.autograd.grad(
+        prediction,
+        parameters,
+        retain_graph=False,
+        create_graph=False,
+        allow_unused=False,
+    )
+    phi = dict(zip(parameters, phi_values, strict=True))
+    delta = (noisy_target - prediction).detach()
+    optimizer.step(phi=phi, delta=delta)
+
+    with torch.no_grad():
+        prediction_value = float(prediction.detach().cpu())
+        noisy_target_value = float(noisy_target.detach().cpu())
+        clean_target_value = float(clean_target.detach().cpu())
+        hidden_active_fraction = float(
+            (forward_result.hidden_activations.detach() > 0)
+            .to(dtype=torch.float32)
+            .mean()
+            .cpu()
+        )
+
+    if check_parameter_finiteness:
+        for parameter in parameters:
+            if not bool(torch.isfinite(parameter).all()):
+                raise FloatingPointError("Non-finite parameter after NetworkIDBD update.")
+        for state in optimizer.state.values():
+            for value in state.values():
+                if torch.is_tensor(value) and not bool(torch.isfinite(value).all()):
+                    raise FloatingPointError("Non-finite NetworkIDBD state after update.")
+
+    noisy_squared_error = (prediction_value - noisy_target_value) ** 2
+    clean_squared_error = (prediction_value - clean_target_value) ** 2
+    return OnlineStepMetrics(
+        stream_step=experience["stream_step"],
+        prediction=prediction_value,
+        noisy_target=noisy_target_value,
+        clean_target=clean_target_value,
+        loss=float(loss.detach().cpu()),
+        noisy_squared_error=noisy_squared_error,
+        clean_squared_error=clean_squared_error,
+        hidden_active_fraction=hidden_active_fraction,
+        gradient_l2_norm=None,
+    )
+
+
 def evaluate_model(
     model: NoisyMNISTMLP,
     experiences: Iterable[Experience],
@@ -179,9 +256,13 @@ def evaluate_model(
     was_training = model.training
     noisy_error_sum = 0.0
     clean_error_sum = 0.0
+    digit_present_clean_error_sum = 0.0
+    digit_absent_clean_error_sum = 0.0
     prediction_sum = 0.0
     finite = True
     observed_steps = 0
+    digit_present_count = 0
+    digit_absent_count = 0
 
     model.eval()
     try:
@@ -208,6 +289,13 @@ def evaluate_model(
                 clean_target_value = float(experience["clean_target"].cpu())
                 noisy_error_sum += (prediction_value - noisy_target_value) ** 2
                 clean_error_sum += (prediction_value - clean_target_value) ** 2
+                clean_squared_error = (prediction_value - clean_target_value) ** 2
+                if experience["digit_present"]:
+                    digit_present_clean_error_sum += clean_squared_error
+                    digit_present_count += 1
+                else:
+                    digit_absent_clean_error_sum += clean_squared_error
+                    digit_absent_count += 1
                 prediction_sum += prediction_value
                 finite = finite and math.isfinite(prediction_value)
                 observed_steps += 1
@@ -219,8 +307,19 @@ def evaluate_model(
         )
     return EvaluationMetrics(
         num_steps=observed_steps,
+        digit_present_count=digit_present_count,
         noisy_target_mse=noisy_error_sum / observed_steps,
         clean_target_mse=clean_error_sum / observed_steps,
+        digit_present_clean_target_mse=(
+            digit_present_clean_error_sum / digit_present_count
+            if digit_present_count
+            else float("nan")
+        ),
+        digit_absent_clean_target_mse=(
+            digit_absent_clean_error_sum / digit_absent_count
+            if digit_absent_count
+            else float("nan")
+        ),
         mean_prediction=prediction_sum / observed_steps,
         finite=finite,
     )

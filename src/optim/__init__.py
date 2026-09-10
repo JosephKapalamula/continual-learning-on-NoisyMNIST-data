@@ -1,5 +1,6 @@
 """Optimization methods used by the NoisyMNIST research artifacts."""
 
+from .networkIDBD import NetworkIDBD
 from .idbd import (
     CanonicalLinearIDBD,
     IDBDConfig,
@@ -9,6 +10,7 @@ from .idbd import (
 )
 
 __all__ = [
+    "NetworkIDBD",
     "CanonicalLinearIDBD",
     "IDBDConfig",
     "LinearSGDConfig",
