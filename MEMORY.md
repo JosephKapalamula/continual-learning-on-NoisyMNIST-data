@@ -51,5 +51,7 @@
 ### 2026-09-10 — Session 5 (full results + CEO next)
 - Frozen SGD lr=0.01. Created train_final_noisymnist_colab.py: train on training pool only, fixed-validation curves every eval_every, embargoed test touched ONCE via dedicated evaluator (src evaluate_model forbids test by design), multi-seed mean±std, CEO plots + checkpoints in final_results/. Default 10k train / 1k valid / 2k test, eval_every 500.
 - Validated --quick --skip_test on CPU EXIT 0 (200 steps, 42s). Next: Colab T4 --quick then full 10k x3 seeds.
+- SGD FINAL DONE on T4 (10k, 69s/seed): seed11 0.8898 / test 0.8967, seed22 0.9821, seed33 0.8304 → validation 0.9008±0.0624. Real learning vs 1.0 baseline, high seed variance (only ~1000 digit hits).
+- Created train_final_idbd_noisymnist_colab.py (frozen engineered IDBD meta=0.1 alpha0=1e-6 eta=0.1 tau=1e4, paired seeds/streams with SGD). 10-step CPU smoke PASS. --quick=100 steps (~100s T4). Next: IDBD 10k seed 11 (~17min) then compare.
 
 <!-- Append new sessions below as ### YYYY-MM-DD — Session N -->
